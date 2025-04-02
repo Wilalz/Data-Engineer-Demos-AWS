@@ -1,0 +1,226 @@
+# "#" Comentarios
+# clave : valor
+# Separadores con espacios, para hacer los anidamientos de las propiedades
+# ">" Permite separar una misma linea de texto para la legibilidad
+# "|" Permite tener texto en multiples lineas
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Despliega dos lambdas, un bucket S3 y una Step function que orquesta la lectura
+  de datos de una API publica y la escritura de la S3 tando de los datos crudos
+  como de los transformados en formatos JSON y CSV
+
+Resourses:
+  # -------------------
+  # 1. Bucket S3
+  # -------------------
+  S3DemoStepFunction:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: s3-demo-step_funct
+
+  # -------------------
+  # 2. Roles e IAM Policies
+  # -------------------
+  # Role para Lambda "write_raw" con permisos minimos de putObject en /raw/
+  # Permite la escritura en el bucket S3 desde la lambda "write_raw" (datos crudos)
+  lambdasRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Path: "/"
+      ManagePolicyArms:
+        - "arn:aws:iam::aws:policy/service-role/AWSLamdaBasicExecutionRole"
+      # Acá se define la politica y se pone el "Allow" y la acción "s3:PutObject"
+      Policies:
+        - PolicyName: S3WriteRawPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource:
+                  - !Sub "arn:aws:s3:::s3-demo-stepfunction/*"
+  
+  # Role para la Step function: para que pueda invocar las dos lambdas
+  StateMachineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - states.amazonaws.com
+            Action: sts:AssumeRole
+      Path: "/"
+      # Acá se define la politica que permite invocar las dos lambda "WriteRaw" y "WriteResult"
+      Policies:
+        - PolicyName: StepFunctionInvokeLambda
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt WriteRawLambda.Arn
+                  - !GetAtt WriteResultLambda.Arn
+  
+  # -------------------
+  # 3. Funciones Lambda
+  # -------------------
+  WriteRawLambda:       # nombre del recurso
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: write_raw
+      Runtime: python3.9
+      Role: !GetAtt lambdasRole.Arn    # Rol definido anteriormente
+      Handler: index.lambda_handler
+      Timeout: 30     # segundos
+      MemorySize: 512
+      Code:
+        ZipFile: |
+          import json
+          import urllib3
+          import boto3
+
+          def lambda_handler(event, context):
+            # Descarga de la API
+            http = urllib3.PollManager()
+            url = "https://www.datos.gov.co/resource/c3m4-hayk.json"
+            response = http.requests("GET", url)
+            data = json.loads(response.data)
+
+            # Escribir en la S3 en la carpeta raw/
+            s3 = boto3.client("s3")
+            bucket_name = "s3-demo-stepfunction"
+            key = "raw/data.json"
+
+            s3-put_object(
+              Bucket = bucket_name,
+              Key = key,
+              Body = json.dumps(data).encode("utf-8)
+            )
+
+            # Retornar informacion relevante para la siguiente lambda
+            # Acá se formatea el contenido para extraer solo los campos necesarios
+            
+            results = []
+            
+            for records in data:
+              results.append({
+                "ano" : record.get("ano", ""),
+                "semestre" : record.get("semestre", ""),
+                "programa" : record.get("programa", ""),
+                "departamento_nacimiento" : record.get("departamento_nacimieto", "")
+              })
+          
+          return results
+  
+  WriteResultLambda:
+    Type: AWS::Lambda::function
+    Properties:
+      FunctionName: write_result
+      Runtime: python3.9
+      Role: !GetAtt lambdasRole.Arn    # Rol definido anteriormente
+      Handler: index.lambda_handler
+      Timeout: 30     # segundos
+      MemorySize: 512
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import csv
+          from io import StringIO
+
+          def lambda_handler(event, context):
+            # "event" es la lista de registros recibidos de la lambda anterior
+
+            # Se obtiene el bucket y la carpeta de destino
+            bucket_name = "s3-demo-stepfunction"
+            key = "result/data.csv"
+
+            # Se crea el objeto StringIO para escribir el CSV
+            csv_buffer = StringIO()
+            # Se crea el writer de CSV
+            csv_writer = csv.writer(csv_buffer)
+            # Se escribe la cabecera del CSV
+            csv_writer.writerow(["ano", "semestre", "programa", "departamento_nacimiento"])
+
+            # Se escribe el contenido del CSV
+            for record in event:
+              csv_writer.writerow([
+                record.get("ano", ""),
+                record.get("semestre", ""),
+                record.get("programa", ""),
+                record.get("departamento_nacimiento", "")
+              ])
+            
+            csv_data = csv_buffer.getvalue()
+
+            # Se crea el cliente de S3
+            s3 = boto3.client("s3")
+            
+            # Se escribe el CSV en la S3
+            s3.put_object(
+              Bucket = bucket_name,
+              Key = key,
+              Body = csv_data.encode("utf-8")
+            )
+
+            # Se retorna el nombre del bucket y la carpeta de destino
+            return {"status": "CSV written to S3"}
+
+  # -------------------
+  # 4. Step Function
+  # -------------------
+  LambdaReadWriteStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: lambda_read_write
+      RoleArn: !GetAtt StateMachineRole.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "Ejemplo de la maquina de estados que invoca 'write_raw' y 'write_result'",
+          "StartAt": "WriteRaw",
+          "States": {
+            "WriteRaw": {
+              "Type": "Task",
+              "Resource": "${WriteRawLambda.Arn}",
+              "Next": "WriteResult"
+            },
+            "WriteResult": {
+              "Type": "Task",
+              "Resource": "${WriteResultLambda.Arn}",
+              "End": true
+            }
+          }
+        }
+
+Output:
+  StateMahineArn:
+    Description: "ARN de la Step Function creada"
+    Value: !Ref LambdaReadWriteStateMachine
+  WriteRawLambdaName:
+    Description: "Nombre de la Lambda que descarga y escribe en raw/ 'write_raw'"
+    Value: !Ref WriteRawLambda
+  WriteResultLambdaName:
+    Description: "Nombre de la Lambda que escribe en result/ 'write_result'"
+    Value: !Ref WriteResultLambda
+  S3BucketName:
+    Description: "Nombre del bucket S3 creado que contiene los datos raw/ y result/"
+    Value: !Ref S3DemoStepFunction
+
+
+
+
