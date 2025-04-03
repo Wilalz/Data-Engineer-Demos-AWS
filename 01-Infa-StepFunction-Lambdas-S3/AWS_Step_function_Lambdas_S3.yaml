@@ -1,4 +1,4 @@
-# "#" Comentarios
+# "#" Comentarios, solo al inicio de la final, nunca al final de una linea
 # clave : valor
 # Separadores con espacios, para hacer los anidamientos de las propiedades
 # ">" Permite separar una misma linea de texto para la legibilidad
@@ -10,14 +10,27 @@ Description: >
   de datos de una API publica y la escritura de la S3 tando de los datos crudos
   como de los transformados en formatos JSON y CSV
 
-Resourses:
+
+# --------------------------------
+# 0. Parámetros o variables
+# --------------------------------
+Parameters:
+  BucketName:
+    Type: String
+    Description: Nombre único del bucket S3
+    Default: stepfunction-lambdas-s3
+
+
+
+Resources:
   # -------------------
   # 1. Bucket S3
   # -------------------
   S3DemoStepFunction:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: s3-demo-step_funct
+      # el "!Ref" permite referenciar el valor del parámetro definido en Parameters
+      BucketName: !Ref BucketName
 
   # -------------------
   # 2. Roles e IAM Policies
@@ -36,8 +49,8 @@ Resourses:
                 - lambda.amazonaws.com
             Action: sts:AssumeRole
       Path: "/"
-      ManagePolicyArms:
-        - "arn:aws:iam::aws:policy/service-role/AWSLamdaBasicExecutionRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
       # Acá se define la politica y se pone el "Allow" y la acción "s3:PutObject"
       Policies:
         - PolicyName: S3WriteRawPolicy
@@ -48,7 +61,8 @@ Resourses:
                 Action:
                   - s3:PutObject
                 Resource:
-                  - !Sub "arn:aws:s3:::s3-demo-stepfunction/*"
+                  # la ${BucketName} es el nombre del bucket definido en los parámetros
+                  - !Sub "arn:aws:s3:::${BucketName}/*"
   
   # Role para la Step function: para que pueda invocar las dos lambdas
   StateMachineRole:
@@ -88,47 +102,52 @@ Resourses:
       Handler: index.lambda_handler
       Timeout: 30     # segundos
       MemorySize: 512
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref BucketName
       Code:
         ZipFile: |
           import json
           import urllib3
           import boto3
+          import os
 
           def lambda_handler(event, context):
-            # Descarga de la API
-            http = urllib3.PollManager()
-            url = "https://www.datos.gov.co/resource/c3m4-hayk.json"
-            response = http.requests("GET", url)
-            data = json.loads(response.data)
+              # Descarga de la API
+              http = urllib3.PoolManager()
+              url = "https://www.datos.gov.co/resource/c3m4-hayk.json"
+              response = http.request("GET", url)
+              data = json.loads(response.data)
 
-            # Escribir en la S3 en la carpeta raw/
-            s3 = boto3.client("s3")
-            bucket_name = "s3-demo-stepfunction"
-            key = "raw/data.json"
+              # Escribir en la S3 en la carpeta raw/
+              s3 = boto3.client("s3")
+              # En la propiedad "Environment" se define el nombre del bucket y luego se referencia acá
+              bucket_name = os.environ["BUCKET_NAME"]
+              key = "raw/data.json"
 
-            s3-put_object(
-              Bucket = bucket_name,
-              Key = key,
-              Body = json.dumps(data).encode("utf-8)
-            )
+              s3.put_object(
+                Bucket = bucket_name,
+                Key = key,
+                Body = json.dumps(data).encode("utf-8")
+              )
 
-            # Retornar informacion relevante para la siguiente lambda
-            # Acá se formatea el contenido para extraer solo los campos necesarios
+              # Retornar informacion relevante para la siguiente lambda
+              # Acá se formatea el contenido para extraer solo los campos necesarios
+              
+              results = []
+              
+              for record in data:
+                  results.append({
+                      "ano" : record.get("ano", ""),
+                      "semestre" : record.get("semestre", ""),
+                      "programa" : record.get("programa", ""),
+                      "departamento_nacimiento" : record.get("departamento_nacimieto", "")
+                })
             
-            results = []
-            
-            for records in data:
-              results.append({
-                "ano" : record.get("ano", ""),
-                "semestre" : record.get("semestre", ""),
-                "programa" : record.get("programa", ""),
-                "departamento_nacimiento" : record.get("departamento_nacimieto", "")
-              })
-          
-          return results
+              return results
   
   WriteResultLambda:
-    Type: AWS::Lambda::function
+    Type: AWS::Lambda::Function
     Properties:
       FunctionName: write_result
       Runtime: python3.9
@@ -136,50 +155,55 @@ Resourses:
       Handler: index.lambda_handler
       Timeout: 30     # segundos
       MemorySize: 512
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref BucketName
       Code:
         ZipFile: |
           import json
           import boto3
           import csv
           from io import StringIO
+          import os
 
           def lambda_handler(event, context):
-            # "event" es la lista de registros recibidos de la lambda anterior
+              # "event" es la lista de registros recibidos de la lambda anterior
 
-            # Se obtiene el bucket y la carpeta de destino
-            bucket_name = "s3-demo-stepfunction"
-            key = "result/data.csv"
+              # Se obtiene el bucket y la carpeta de destino
+              # Recuerde cambiar el nombre la S3, debe ser unico
+              bucket_name = os.environ["BUCKET_NAME"]
+              key = "result/data.csv"
 
-            # Se crea el objeto StringIO para escribir el CSV
-            csv_buffer = StringIO()
-            # Se crea el writer de CSV
-            csv_writer = csv.writer(csv_buffer)
-            # Se escribe la cabecera del CSV
-            csv_writer.writerow(["ano", "semestre", "programa", "departamento_nacimiento"])
+              # Se crea el objeto StringIO para escribir el CSV
+              csv_buffer = StringIO()
+              # Se crea el writer de CSV
+              writer = csv.writer(csv_buffer)
+              # Se escribe la cabecera del CSV
+              writer.writerow(["ano", "semestre", "programa", "departamento_nacimiento"])
 
-            # Se escribe el contenido del CSV
-            for record in event:
-              csv_writer.writerow([
-                record.get("ano", ""),
-                record.get("semestre", ""),
-                record.get("programa", ""),
-                record.get("departamento_nacimiento", "")
-              ])
-            
-            csv_data = csv_buffer.getvalue()
+              # Se escribe el contenido del CSV
+              for record in event:
+                  writer.writerow([
+                      record.get("ano", ""),
+                      record.get("semestre", ""),
+                      record.get("programa", ""),
+                      record.get("departamento_nacimiento", "")
+                  ])
+              
+              csv_data = csv_buffer.getvalue()
 
-            # Se crea el cliente de S3
-            s3 = boto3.client("s3")
-            
-            # Se escribe el CSV en la S3
-            s3.put_object(
-              Bucket = bucket_name,
-              Key = key,
-              Body = csv_data.encode("utf-8")
-            )
+              # Se crea el cliente de S3
+              s3 = boto3.client("s3")
+              
+              # Se escribe el CSV en la S3
+              s3.put_object(
+                  Bucket = bucket_name,
+                  Key = key,
+                  Body = csv_data.encode("utf-8")
+              )
 
-            # Se retorna el nombre del bucket y la carpeta de destino
-            return {"status": "CSV written to S3"}
+              # Se retorna el nombre del bucket y la carpeta de destino
+              return {"status": "CSV written to S3"}
 
   # -------------------
   # 4. Step Function
@@ -207,20 +231,19 @@ Resourses:
           }
         }
 
-Output:
-  StateMahineArn:
+Outputs:
+  StateMachineArn:
     Description: "ARN de la Step Function creada"
     Value: !Ref LambdaReadWriteStateMachine
+  
   WriteRawLambdaName:
     Description: "Nombre de la Lambda que descarga y escribe en raw/ 'write_raw'"
     Value: !Ref WriteRawLambda
+  
   WriteResultLambdaName:
-    Description: "Nombre de la Lambda que escribe en result/ 'write_result'"
+    Description: "Nombre de la Lambda que procesa y escribe en result/ 'write_result'"
     Value: !Ref WriteResultLambda
+  
   S3BucketName:
     Description: "Nombre del bucket S3 creado que contiene los datos raw/ y result/"
     Value: !Ref S3DemoStepFunction
-
-
-
-
