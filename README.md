@@ -17,7 +17,7 @@ Tomados del diplomado de Ingenieria de datos de La Escuela de Ingenieria de Anti
 ![Demo StepFunction + Lambdas + S3](https://github.com/Wilalz/Data-Engineer-Demos-AWS/blob/03ad6be8b7f027acaed200b4342afc0dc1e26725/01-Infa-StepFunction-Lambdas-S3/AWS_Step_function_Lambdas_S3.jpg)
 
 ## Demo 02 - EC2
-![Demo EC2 + EBS + VPC + Subnet](https://github.com/Wilalz/Data-Engineer-Demos-AWS/)
+![Demo EC2 + EBS + VPC + Subnet](https://github.com/Wilalz/Data-Engineer-Demos-AWS/blob/b83e35c31feb2c9467dd002fb8b11e5e549cf5f8/02-Infra-EC2-VPC-Subnet/AWS_EC2_EBS_VPC_Subnet.jpg)
 
 ## Instalación
 Clona o descarga el repósitorio\

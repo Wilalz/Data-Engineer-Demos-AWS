@@ -80,12 +80,12 @@ Resources:
       AvailabilityZone: "us-east-1a"
       BlockDeviceMappings: 
         - DeviceName: /dev/xvda
-          Ebs:
-            VolumeSize: 50
+          Ebs:   # EBS maximo 30 GB en capa gratis
+            VolumeSize: 8
             DeleteOnTermination: true 
         - DeviceName: /dev/sdf
           Ebs:
-            VolumeSize: 120
+            VolumeSize: 8
             DeleteOnTermination: true
       IamInstanceProfile: !Ref rInstanceProfile
       ImageId: ami-051f8a213df8bc089
