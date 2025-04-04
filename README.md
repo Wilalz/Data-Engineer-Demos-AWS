@@ -1,11 +1,14 @@
 # IaC Infraestructura como Código - AWS Demos
 Ejemplos de uso de código para desplegar servicios en la nube de AWS como por ejemplo:
-- Step function - Cooridna diferentes servicios 
+- Step function - Coordina diferentes servicios 
 - Lambdas - Computacion, procesamiento sin servidor
 - S3 - Almacenamiento
-- IAM - Politicas (permisos)
+- IAM - Politicas y roles (permisos)
 - EC2 - Maquinas virtuales (instancias)
-- VPC - Red privadas y publicas
+- EBS - Almacenamiento conectado a la EC2 (disco duro)
+- VPC - Red privadas donde estarán todos mis recursos
+- Subnet - Subred dentro de la VPC (publica o privada)
+
 
 Tomados del diplomado de Ingenieria de datos de La Escuela de Ingenieria de Antioquia (EIA) y Data Clouders
 
@@ -14,7 +17,7 @@ Tomados del diplomado de Ingenieria de datos de La Escuela de Ingenieria de Anti
 ![Demo StepFunction + Lambdas + S3](https://github.com/Wilalz/Data-Engineer-Demos-AWS/blob/03ad6be8b7f027acaed200b4342afc0dc1e26725/01-Infa-StepFunction-Lambdas-S3/AWS_Step_function_Lambdas_S3.jpg)
 
 ## Demo 02 - EC2
-![Demo EC2](https://github.com/Wilalz/Data-Engineer-Demos-AWS/)
+![Demo EC2 + EBS + VPC + Subnet](https://github.com/Wilalz/Data-Engineer-Demos-AWS/)
 
 ## Instalación
 Clona o descarga el repósitorio\
