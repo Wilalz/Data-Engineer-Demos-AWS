@@ -11,7 +11,7 @@ Mediante lenguaje SQL se realizan consultas para crear las tablas e insertar dat
 Luego, se realiza una transacción llevando cierto valor de un usuario a otro para mostrar las caracteristicas ACID de OLTP como son: Atomicidad, Consistencia, Aislamiento y Durabilidad de los datos
 
 <!-- imagen -->
-![Arquitectura](https://github.com/Wilalz/Data-Engineer-Demos-AWS)
+![Arquitectura](https://github.com/Wilalz/Data-Engineer-Demos-AWS/blob/8aac5a648f40d6878b21d12bfdc418e61f2310e3/03-Infra-RDS-OLTP-DataBase/AWS%20infra%20RDS%20OLTP.jpg)
 
 
 ## Instalación

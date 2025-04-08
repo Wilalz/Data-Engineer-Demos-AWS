@@ -21,7 +21,7 @@ Tomados del diplomado de Ingenieria de datos de La Escuela de Ingenieria de Anti
 ![Demo EC2 + EBS + VPC + Subnet](https://github.com/Wilalz/Data-Engineer-Demos-AWS/blob/b83e35c31feb2c9467dd002fb8b11e5e549cf5f8/02-Infra-EC2-VPC-Subnet/AWS_EC2_EBS_VPC_Subnet.jpg)
 
 ## Demo 03 - RDS (OLTP Data base)
-![Demo RDS (OLTP Data base)](https://github.com/Wilalz/Data-Engineer-Demos-AWS)
+![Demo RDS (OLTP Data base)](https://github.com/Wilalz/Data-Engineer-Demos-AWS/blob/8aac5a648f40d6878b21d12bfdc418e61f2310e3/03-Infra-RDS-OLTP-DataBase/AWS%20infra%20RDS%20OLTP.jpg)
 
 
 ## Instalación
