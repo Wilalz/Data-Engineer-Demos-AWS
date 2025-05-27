@@ -13,7 +13,7 @@ Luego, se realiza una transacción llevando cierto valor de un usuario a otro pa
 Todo está optimizado para operar dentro de los límites de la capa gratuita (Free Tier). (ver archivo costos_generados_primer_infra.yaml)
 
 <!-- imagen -->
-![Arquitectura](https://github.com/Wilalz/Data-Engineer-Demos-AWS/blob/8aac5a648f40d6878b21d12bfdc418e61f2310e3/03-Infra-RDS-OLTP-DataBase/AWS%20infra%20RDS%20OLTP.jpg)
+![Arquitectura](https://github.com/Wilalz/Data-Engineer-Demos-AWS/blob/1ecf472eea7d313c5a1d225c5561b566ab53405b/03-Infra-RDS-OLTP-DataBase/AWS%20infra%20RDS%20OLTP.png)
 
 
 ## Instalación
