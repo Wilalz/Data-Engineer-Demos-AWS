@@ -1,9 +1,13 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: 2010-09-09
 Description: >
-  Template para desplegar una base de datos PostgreSQL en AWS utilizando la capa gratuita.
-  Este template crea una VPC con dos subredes públicas, configura el acceso a Internet, 
-  define un grupo de seguridad que permite el acceso a PostgreSQL y despliega una instancia RDS 
-  db.t4g.micro en un grupo de subredes.
+  Este template despliega una base de datos PostgreSQL en AWS RDS, 
+  optimizada para operar dentro de los límites de la capa gratuita (Free Tier).
+  Crea una VPC con dos subredes privadas distribuidas en zonas de disponibilidad distintas,
+  configura conectividad pública mediante un Internet Gateway para habilitar acceso externo controlado,
+  y establece un grupo de seguridad que permite conexiones al puerto 5432 exclusivamente desde una IP específica.
+  La instancia RDS se lanza con 10 GB de almacenamiento en clase db.t4g.micro,
+  sin backups automáticos ni protección contra eliminación, para facilitar pruebas de bases de datos OLTP
+  desde clientes externos como DBeaver.
 
 # -----------------------------
 # Parámetros de entrada
@@ -13,20 +17,20 @@ Parameters:
     Description: Nombre de la base de datos a crear.
     Type: String
     Default: 'mydatabase'
-  DBUser:
+  DBUsername:
     Description: Nombre del usuario administrador de la base de datos.
     Type: String
-    Default: 'admin'
+    Default: 'DBadmin'
   DBPassword:
     Description: Contraseña para el usuario administrador.
     Type: String
     NoEcho: true
   DBAllocatedStorage:
-    Description: Tamaño de almacenamiento en GB para la base de datos (mínimo 20GB para free tier).
+    Description: Tamaño de almacenamiento en GB para la base de datos (Capa gratuita máximo 20GB BD+Backups).
     Type: Number
-    Default: 20
-    MinValue: 20
-    MaxValue: 1024
+    Default: 10
+    MinValue: 10
+    MaxValue: 1024  # Si se desea escalar mas allá de la capa gratuita
   VpcCIDR:
     Description: CIDR a asignar a la VPC.
     Type: String
@@ -40,10 +44,8 @@ Parameters:
     Type: String
     Default: '10.0.2.0/24'
   AllowedIP:
-    Description: Rango de IPs que tendrán acceso a la base de datos (ej. 0.0.0.0/0 para acceso global; se recomienda restringirlo en producción).
+    Description: Rango de IPs que tendrán acceso a la base de datos (Por seguridd pon tú IP x.x.x.x/32. Si deseas acceso global pon 0.0.0.0/0)
     Type: String
-    Default: '0.0.0.0/0'
-
 # -----------------------------
 # Recursos a crear
 # -----------------------------
@@ -60,28 +62,28 @@ Resources:
           Value: RDSVPC
 
   # Creación de la primera subred pública
-  PublicSubnet1:
+  RDSSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref RDSVPC
       CidrBlock: !Ref PublicSubnet1CIDR
       AvailabilityZone: !Select [0, !GetAZs '']
-      MapPublicIpOnLaunch: true
+      MapPublicIpOnLaunch: false # Para no asignar IPs públicas automáticamente
       Tags:
         - Key: Name
-          Value: PublicSubnet1
+          Value: RDSSubnet1
 
   # Creación de la segunda subred pública
-  PublicSubnet2:
+  RDSSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref RDSVPC
       CidrBlock: !Ref PublicSubnet2CIDR
       AvailabilityZone: !Select [1, !GetAZs '']
-      MapPublicIpOnLaunch: true
+      MapPublicIpOnLaunch: false # Para no asignar IPs públicas automáticamente
       Tags:
         - Key: Name
-          Value: PublicSubnet2
+          Value: RDSSubnet2
 
   # Creación del Internet Gateway para habilitar la conectividad a Internet en la VPC
   InternetGateway:
@@ -120,21 +122,22 @@ Resources:
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet1
+      SubnetId: !Ref RDSSubnet1
       RouteTableId: !Ref PublicRouteTable
 
   # Asociación de la tabla de rutas a la segunda subred pública
   PublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet2
+      SubnetId: !Ref RDSSubnet2
       RouteTableId: !Ref PublicRouteTable
+
 
   # Grupo de seguridad que permite el acceso a la base de datos PostgreSQL en el puerto 5432
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Permitir acceso a la base de datos PostgreSQL
+      GroupDescription: Acceso restringido a RDS base de datos PostgreSQL
       VpcId: !Ref RDSVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -144,42 +147,45 @@ Resources:
       Tags:
         - Key: Name
           Value: RDSSecurityGroup
-
   # Grupo de subredes para RDS, se requieren al menos dos subredes en AZs diferentes
-  DBSubnetGroup:
+  RDSSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupDescription: Subredes para la instancia RDS PostgreSQL
+      DBSubnetGroupDescription: Subnet group para RDS PostgreSQL
       SubnetIds:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-      Tags:
-        - Key: Name
-          Value: DBSubnetGroup
-
-  # Instancia RDS PostgreSQL utilizando una instancia db.t4g.micro (compatible con la capa gratuita)
-  MyPostgreSQLDB:
+        - !Ref RDSSubnet1
+        - !Ref RDSSubnet2
+      DBSubnetGroupName: rds-subnet-group
+# Instancia RDS PostgreSQL utilizando una instancia db.t4g.micro (compatible con la capa gratuita)
+  RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBName: !Ref DBName
+      DBInstanceIdentifier: rds-postgres-demo
       AllocatedStorage: !Ref DBAllocatedStorage
       DBInstanceClass: db.t4g.micro
       Engine: postgres
-      EngineVersion: "17.2"
-      MasterUsername: !Ref DBUser
+      EngineVersion: 17.2
+      MasterUsername: !Ref DBUsername
       MasterUserPassword: !Ref DBPassword
       VPCSecurityGroups:
         - !GetAtt RDSSecurityGroup.GroupId
-      DBSubnetGroupName: !Ref DBSubnetGroup
-      MultiAZ: false               # Desactivar Multi-AZ para cumplir con la capa gratuita
-      PubliclyAccessible: true     # Permite el acceso público (ajustar según requerimientos de seguridad)
-      BackupRetentionPeriod: 7     # Retención de backups durante 7 días
-      StorageType: gp2             # Tipo de almacenamiento general (SSD)
+      DBSubnetGroupName: !Ref RDSSubnetGroup
+      PubliclyAccessible: true     # Hacer la instancia accesible públicamente
+      BackupRetentionPeriod: 0     # Desactivado poner 0, capa gratuita hasta 7 dias sin superar 20GB BD+Backup
+      DeleteAutomatedBackups: true # Elimina backups automáticos para cumplir con la capa gratuita
       DeletionProtection: false    # Deshabilita protección contra eliminación para facilitar pruebas
+      StorageType: gp2             # Tipo de almacenamiento general (SSD)
+      MultiAZ: false               # Desactivar Multi-AZ para cumplir con la capa gratuita
+
+      AutoMinorVersionUpgrade: true
+      Tags:
+        - Key: Name
+          Value: FreeTierRDS
     Metadata:
       Comment: >
         Este recurso crea una instancia de RDS PostgreSQL en una instancia db.t4g.micro, 
         garantizando compatibilidad con la capa gratuita de AWS.
+
 
 # -----------------------------
 # Salidas (Outputs)
@@ -187,10 +193,10 @@ Resources:
 Outputs:
   DBEndpoint:
     Description: "Endpoint de la base de datos PostgreSQL"
-    Value: !GetAtt MyPostgreSQLDB.Endpoint.Address
+    Value: !GetAtt RDSInstance.Endpoint.Address
   DBInstanceIdentifier:
     Description: "Identificador de la instancia RDS"
-    Value: !Ref MyPostgreSQLDB
+    Value: !Ref RDSInstance
   RDSVPCId:
     Description: ID de la VPC creada
     Value: !Ref RDSVPC
