@@ -83,10 +83,11 @@ Resources:
           Ebs:   # EBS maximo 30 GB en capa gratis
             VolumeSize: 8
             DeleteOnTermination: true 
-        - DeviceName: /dev/sdf
-          Ebs:
-            VolumeSize: 8
-            DeleteOnTermination: true
+        # Se comenta el segundo volumen EBS para no incurrir en costos adicionales    
+        #- DeviceName: /dev/sdf
+        #  Ebs:
+        #    VolumeSize: 8
+        #    DeleteOnTermination: true
       IamInstanceProfile: !Ref rInstanceProfile
       ImageId: ami-051f8a213df8bc089
       InstanceType: t2.micro

@@ -1,5 +1,5 @@
-# "#" Comentarios, solo al inicio de la final, nunca al final de una linea
-# clave : valor
+# "#" Comentarios, solo al inicio de la linea, nunca al final de una linea
+# Sintaxis clave : valor
 # Separadores con espacios, para hacer los anidamientos de las propiedades
 # ">" Permite separar una misma linea de texto para la legibilidad
 # "|" Permite tener texto en multiples lineas
