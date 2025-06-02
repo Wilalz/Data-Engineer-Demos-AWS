@@ -5,6 +5,7 @@ Ojo, la infra desplegada con el archivo rds_postgres.yaml generó costos!
 El yaml usado tiene algunos inconvenientes:
 - Crea una base de datos PostgreSQL (RDS) con backups automáticos que exceden la capa gratuita de 20 GB
 - Crea dos subredes públicas con IP pública asociada a la infra de red (VPC). AWS cobra por IP estática asignada pero no usada (apagada). En las subnets está MapPublicIpOnLaunch está en true
+- Desde hace un tiempo AWS tambien cobra si una RDS tiene ip publica. Este punto no puede mejorarse ya que es una politica de AWS y que está fuera de la capa gratuita. La unica forma que no cobre es desabilitando el acceso publico (hay otras opciones de conexion)
 
 ## Qué hacer para detener los costos?
 - Eliminar la instancia RDS	Si ya no la necesitas
@@ -36,5 +37,21 @@ Aunque esta versión está optimizada para el Free Tier, existen algunos riesgos
 - Crear más de una RDS o aumentar almacenamiento - El límite de 20 GB es total (entre todas las RDS y backups)
 - Backups (snapshots) manuales nunca están cubiertos por Free Tier, y no se eliminan al borrar la RDS.
 - Eliminar la RDS y dejar backups generá cobro por almacenamiento
-- No liberar IPs públicas, Elastic IPs o direcciones públicas no asociadas siguen generando cargos por hora
+- RECORDAR! que si se activa el MakeRDSPublic en true hace la RDS publica y generará cobro por hora de uso por la ip. 
+
+## Recomendación final: eliminar todo lo que no tiene en uso
+Paso a paso de eliminación de infraestructura aprovicionada
+
+1. Hacer backup manual (opcional).
+    - En RDS → Take snapshot (esto sí se cobra hasta que lo borres).
+2. Eliminar la pila CloudFormation.
+    - Selecciona la pila
+    - Acciones → Delete.
+    - Espera a que el estado sea DELETE_COMPLETE.
+3. Limpiar recursos huérfanos (si los hubiera).
+    - Elastic IP (ip publica fija) → debe quedar vacía → Ver EC2
+    - Network Interfaces → solo la ENI “default” o ninguna → Ver EC2
+    - Volumes / Snapshots (backups) → Ver EC2 y RDS
+    - EBS volumenes de almacenamiento → Ver Ec2
+4. Re-chequear Cost Explorer al día siguiente, si se hizo bien, el gasto diario mostrará 0 USD.
 

@@ -1,0 +1,123 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Plantilla EC2 optimizada para pruebas dentro del Free Tier, sin IP pública y con etiquetas para facilitar su eliminación posterior.
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    Description: Tipo de instancia EC2
+
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Nombre del par de claves EC2
+
+  ClientIP:
+    Type: String
+    Description: IP pública autorizada para acceder por SSH (formato x.x.x.x/32)
+
+Resources:
+
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: Demo2-VPC
+        - Key: Project
+          Value: D2-ec2-ebs-vpc
+
+  MySubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: us-east-1a
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: Demo2-Subnet
+        - Key: Project
+          Value: D2-ec2-ebs-vpc
+
+  MySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Acceso SSH restringido
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref ClientIP
+      Tags:
+        - Key: Name
+          Value: Demo2-SG
+        - Key: Project
+          Value: D2-ec2-ebs-vpc
+
+  MyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+      Tags:
+        - Key: Project
+          Value: D2-ec2-ebs-vpc
+
+  MyInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref MyRole
+
+  MyEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SubnetId: !Ref MySubnet
+      ImageId: ami-0c02fb55956c7d316
+      SecurityGroupIds:
+        - !Ref MySecurityGroup
+      IamInstanceProfile: !Ref MyInstanceProfile
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          AssociatePublicIpAddress: false
+          SubnetId: !Ref MySubnet
+          GroupSet:
+            - !Ref MySecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 8
+            VolumeType: gp2
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: Demo2-EC2
+        - Key: Project
+          Value: D2-ec2-ebs-vpc
+
+Outputs:
+  InstanceId:
+    Description: ID de la instancia EC2 creada
+    Value: !Ref MyEC2Instance
+
+  VPCId:
+    Description: ID de la VPC creada
+    Value: !Ref MyVPC
+
+  SubnetId:
+    Description: ID de la Subnet creada
+    Value: !Ref MySubnet

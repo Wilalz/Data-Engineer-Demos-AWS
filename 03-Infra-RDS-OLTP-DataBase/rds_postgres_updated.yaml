@@ -1,13 +1,16 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: >
-  Este template despliega una base de datos PostgreSQL en AWS RDS, 
-  optimizada para operar dentro de los límites de la capa gratuita (Free Tier).
+  Este template despliega una base de datos PostgreSQL en AWS RDS,
   Crea una VPC con dos subredes privadas distribuidas en zonas de disponibilidad distintas,
-  configura conectividad pública mediante un Internet Gateway para habilitar acceso externo controlado,
+  configura conectividad pública mediante un Internet Gateway para habilitar acceso externo controlado (opción de endpoint público),
   y establece un grupo de seguridad que permite conexiones al puerto 5432 exclusivamente desde una IP específica.
   La instancia RDS se lanza con 10 GB de almacenamiento en clase db.t4g.micro,
-  sin backups automáticos ni protección contra eliminación, para facilitar pruebas de bases de datos OLTP
-  desde clientes externos como DBeaver.
+  sin backups automáticos ni protección contra eliminación para conservarse dentro los servicios gratuitos
+  Esta demo sirve para facilitar pruebas de bases de datos OLTP desde clientes externos como DBeaver.
+  La plantilla avisa dónde se generan cargos potenciales:
+    - IPv4 pública costo por hora
+    - Almacenamiento total Free Tier = 20 GB (DB + backups).
+  Todos los recursos llevan Tags  ⇒  fácil limpieza con filtros o AWS Resource Groups.
 
 # -----------------------------
 # Parámetros de entrada
@@ -30,7 +33,7 @@ Parameters:
     Type: Number
     Default: 10
     MinValue: 10
-    MaxValue: 1024  # Si se desea escalar mas allá de la capa gratuita
+    MaxValue: 20  # Si se desea escalar mas allá de la capa gratuita
   VpcCIDR:
     Description: CIDR a asignar a la VPC.
     Type: String
@@ -46,6 +49,17 @@ Parameters:
   AllowedIP:
     Description: Rango de IPs que tendrán acceso a la base de datos (Por seguridd pon tú IP x.x.x.x/32. Si deseas acceso global pon 0.0.0.0/0)
     Type: String
+  # Si = true ► RDS tendrá endpoint ip pública → generará cobros
+  MakeRDSPublic:
+    Type: String
+    AllowedValues: [true, false]
+    Default: true
+    Description: Crear RDS con PubliclyAccessible.  true = acceso directo internet y genera cobros por ip
+
+# Helper macro para no repetir bloques de Tags
+Conditions:
+  RDSPublic: !Equals [ !Ref MakeRDSPublic, true ]
+
 # -----------------------------
 # Recursos a crear
 # -----------------------------
@@ -61,7 +75,7 @@ Resources:
         - Key: Name
           Value: RDSVPC
 
-  # Creación de la primera subred pública
+  # Creación de la primera subred publica
   RDSSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -73,7 +87,7 @@ Resources:
         - Key: Name
           Value: RDSSubnet1
 
-  # Creación de la segunda subred pública
+  # Creación de la segunda subred publica
   RDSSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -91,7 +105,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: MyInternetGateway
+          Value: RDSInternetGateway
 
   # Asociación del Internet Gateway con la VPC
   AttachGateway:
@@ -107,7 +121,7 @@ Resources:
       VpcId: !Ref RDSVPC
       Tags:
         - Key: Name
-          Value: PublicRouteTable
+          Value: RDSPublicRouteTable
 
   # Configuración de la ruta para dirigir todo el tráfico 0.0.0.0/0 hacia el Internet Gateway
   PublicRoute:
@@ -137,7 +151,7 @@ Resources:
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Acceso restringido a RDS base de datos PostgreSQL
+      GroupDescription: Acceso restringido a RDS base de datos PostgreSQL puerto 5432
       VpcId: !Ref RDSVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -170,7 +184,7 @@ Resources:
       VPCSecurityGroups:
         - !GetAtt RDSSecurityGroup.GroupId
       DBSubnetGroupName: !Ref RDSSubnetGroup
-      PubliclyAccessible: true     # Hacer la instancia accesible públicamente
+      PubliclyAccessible: !If [ RDSPublic, true, false ]    # Hacer la instancia accesible públicamente
       BackupRetentionPeriod: 0     # Desactivado poner 0, capa gratuita hasta 7 dias sin superar 20GB BD+Backup
       DeleteAutomatedBackups: true # Elimina backups automáticos para cumplir con la capa gratuita
       DeletionProtection: false    # Deshabilita protección contra eliminación para facilitar pruebas
@@ -180,7 +194,7 @@ Resources:
       AutoMinorVersionUpgrade: true
       Tags:
         - Key: Name
-          Value: FreeTierRDS
+          Value: RDSInstance
     Metadata:
       Comment: >
         Este recurso crea una instancia de RDS PostgreSQL en una instancia db.t4g.micro, 
